@@ -16,6 +16,7 @@ from .forms import LoginForm, SuaForm, Sua_ApplicationForm, ProofForm, AppealFor
 from .models import Sua, Proof, Sua_Application, GSuaPublicity, GSua, Student, Appeal, SuaGroup
 from .api import check_signature
 import json
+import pprint
 
 
 class JSONResponseMixin(object):
@@ -58,7 +59,8 @@ class JSONStudentSuaListView(JSONListView):
         return hasattr(usr, 'student') and usr.student == self.student
 
     def get_queryset(self):
-        self.student = get_object_or_404(Student, pk=self.args[0])
+        # print(dir(self))
+        self.student = get_object_or_404(Student, pk=self.kwargs['pk'])
         return Sua.objects.filter(student=self.student, is_valid=True).order_by('date')
 
     def get_context_data(self, **kwargs):
@@ -83,7 +85,7 @@ class JSONSuaApplicationView(JSONListView):
         return hasattr(usr, 'student') and usr.student == self.sua.student
 
     def get_queryset(self):
-        self.sua = get_object_or_404(Sua, pk=self.args[0])
+        self.sua = get_object_or_404(Sua, pk=self.kwargs['pk'])
         return Sua_Application.objects.filter(sua=self.sua)
 
     def get_context_data(self, **kwargs):
@@ -108,7 +110,7 @@ class JSONStudentGroupListView(JSONListView):
         return hasattr(usr, 'student') and usr.student == self.student
 
     def get_queryset(self):
-        self.student = get_object_or_404(Student, pk=self.args[0])
+        self.student = get_object_or_404(Student, pk=self.kwargs['pk'])
         return self.student.user.groups.all()
 
     def get_context_data(self, **kwargs):
@@ -192,7 +194,7 @@ class JSONGSuaSuaListView(JSONListView):
     """
 
     def get_queryset(self):
-        self.gsua = get_object_or_404(GSua, pk=self.args[0])
+        self.gsua = get_object_or_404(GSua, pk=self.kwargs['pk'])
         return self.gsua.suas.all()
 
     def get_context_data(self, **kwargs):
@@ -214,7 +216,7 @@ class JSONSuaGSuaListView(JSONListView):
     """
 
     def get_queryset(self):
-        self.sua = get_object_or_404(Sua, pk=self.args[0])
+        self.sua = get_object_or_404(Sua, pk=self.kwargs['pk'])
         return self.sua.gsua_set.all()
 
     def get_context_data(self, **kwargs):
@@ -237,7 +239,7 @@ class JSONSuaGroupAppealListView(JSONListView):
 
     def get_queryset(self):
         usr = self.request.user
-        self.group = get_object_or_404(SuaGroup, pk=self.args[0])
+        self.group = get_object_or_404(SuaGroup, pk=self.kwargs['pk'])
         appeals = QuerySet()
         if usr.is_superuser or self.group.group in usr.groups.all():
             appeals = Appeal.objects.filter(gsua__group=self.group)
@@ -308,8 +310,8 @@ class StudentCreate(PermissionRequiredMixin, generic.edit.CreateView):
     login_url = '/'
 
     def form_valid(self, form):
-        username = form.cleaned_data['number']
-        password = form.cleaned_data['initial_password']
+        username = str(form.cleaned_data['number'])
+        password = str(form.cleaned_data['initial_password'])
         group_pk_list = form.cleaned_data['group']
         if password == '' or None:
             password = '12345678'
@@ -392,7 +394,7 @@ class Sua_ApplicationDetailView(UserPassesTestMixin, generic.DetailView):
     def test_func(self):
         usr = self.request.user
         application = self.get_object()
-        return usr.is_superuser or usr.pk == application.sua.student.pk
+        return usr.is_superuser or usr.student.pk == application.sua.student.pk
 
     def get_queryset(self):
         return Sua_Application.objects.all()
@@ -465,7 +467,7 @@ class Sua_ApplicationCreate(PermissionRequiredMixin, generic.edit.CreateView):
 
     def get_context_data(self, **kwargs):
         context = super(Sua_ApplicationCreate, self).get_context_data(**kwargs)
-        self.stu = get_object_or_404(Student, pk=self.args[0])
+        self.stu = get_object_or_404(Student, pk=self.kwargs['pk'])
         date = timezone.now()
         year = date.year
         month = date.month
@@ -707,6 +709,7 @@ class GSuaPublicityCreate(PermissionRequiredMixin, generic.edit.CreateView):
                     sua.is_valid = True
                     sua.save()
                     suas.append(sua)
+            print(gsuap.title)
             gsua = GSua.objects.create(title=gsuap.title, group=group, date=date, is_valid=True)
             for sua in suas:
                 gsua.suas.add(sua)
@@ -934,8 +937,8 @@ class AppealCheck(PermissionRequiredMixin, generic.edit.UpdateView):
         self.appeal = self.get_object()
         form.instance.is_checked = True
         return super(AppealCheck, self).form_valid(form)
-    
-        
+
+
 def login_view(request):
     if request.method == 'POST':
         form = LoginForm(request.POST)
@@ -1015,6 +1018,7 @@ def index(request):
                 teams[sua.team][sua.suahours] = []
             teams[sua.team][sua.suahours].append(sua.student.name)
         gsap_list.append((gsap, teams))
+    pprint.pprint(appeals_list)
     return render(request, 'sua/index.html', {
         'stu_name': name,
         'stu_number': number,
